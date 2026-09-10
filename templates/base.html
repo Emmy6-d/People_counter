@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}People Counter{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+<nav class="nav">
+    <div class="brand">People Counter</div>
+    <div class="nav-links">
+        <a href="/">Dashboard</a>
+        <a href="/reports">Reports</a>
+        <a href="/events">Events</a>
+    </div>
+</nav>
+
+<main class="container">
+    {% block content %}{% endblock %}
+</main>
+
+<footer>
+    ESP32 Directional Counter · Flask · Supabase
+</footer>
+</body>
+</html>

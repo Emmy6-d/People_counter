@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Events · People Counter{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>Recent crossing events</h1>
+        <p>Each row represents one valid S1 → S2 count.</p>
+    </div>
+    <button onclick="loadEvents()">Refresh</button>
+</div>
+
+<section class="panel">
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th><th>Time</th><th>Device</th>
+                    <th>Event</th><th>Sequence</th><th>Count</th>
+                </tr>
+            </thead>
+            <tbody id="eventsBody"></tbody>
+        </table>
+    </div>
+</section>
+
+<script>
+async function loadEvents() {
+    const r = await fetch("/api/recent-events?limit=100");
+    const data = await r.json();
+    document.getElementById("eventsBody").innerHTML = data.map(e => `
+        <tr>
+            <td>${e.id}</td>
+            <td>${new Date(e.event_time).toLocaleString()}</td>
+            <td>${e.device_id}</td>
+            <td>${e.event_type}</td>
+            <td>${e.sensor_sequence}</td>
+            <td>${e.count_delta}</td>
+        </tr>
+    `).join("");
+}
+loadEvents();
+</script>
+{% endblock %}

@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Reports · People Counter{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>Reports</h1>
+        <p>Historical totals are calculated from immutable crossing events.</p>
+    </div>
+    <button onclick="loadReports()">Refresh</button>
+</div>
+
+<section class="panel">
+    <h2>Daily report</h2>
+    <canvas id="dailyReportChart"></canvas>
+</section>
+
+<section class="panel">
+    <h2>Weekly report</h2>
+    <canvas id="weeklyReportChart"></canvas>
+</section>
+
+<section class="panel">
+    <h2>Monthly report</h2>
+    <canvas id="monthlyReportChart"></canvas>
+</section>
+
+<script>
+let dailyChart, weeklyChart, monthlyChart;
+
+async function getJson(url) {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+}
+
+function replaceChart(oldChart, canvasId, labels, values) {
+    if (oldChart) oldChart.destroy();
+    return new Chart(document.getElementById(canvasId), {
+        type: "bar",
+        data: {
+            labels,
+            datasets: [{ label: "People", data: values }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+    });
+}
+
+async function loadReports() {
+    try {
+        const daily = await getJson("/api/daily?days=30");
+        const weekly = await getJson("/api/weekly?weeks=12");
+        const monthly = await getJson("/api/monthly?months=12");
+
+        dailyChart = replaceChart(
+            dailyChart, "dailyReportChart",
+            daily.map(x => x.day), daily.map(x => x.people)
+        );
+        weeklyChart = replaceChart(
+            weeklyChart, "weeklyReportChart",
+            weekly.map(x => x.week_start), weekly.map(x => x.people)
+        );
+        monthlyChart = replaceChart(
+            monthlyChart, "monthlyReportChart",
+            monthly.map(x => x.month_start), monthly.map(x => x.people)
+        );
+    } catch (e) {
+        alert("Could not load reports: " + e.message);
+    }
+}
+
+loadReports();
+</script>
+{% endblock %}
