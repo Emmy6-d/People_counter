@@ -22,6 +22,7 @@
 #include <LiquidCrystal_I2C.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 #include <time.h>
 
 // ---------------- Hardware ----------------
@@ -35,9 +36,9 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 const char* WIFI_SSID     = "SanTech-Networking";
 const char* WIFI_PASSWORD = "Networking112@";
 
-// Example if Flask PC IP is 192.168.1.20:
-// http://192.168.1.20:5000/api/device/event
-const char* FLASK_API_URL = "http://192.168.8.10:5000/api/device/event";
+// Replace YOUR-RENDER-SERVICE with the service name assigned by Render.
+const char* FLASK_API_URL =
+  "https://YOUR-RENDER-SERVICE.onrender.com/api/device/event";
 
 // Must match DEVICE_API_KEY in Flask .env
 const char* DEVICE_API_KEY = "fDr15jScnzBpcQV6vlteQbcPtlZ70T14m6C2YsCOQyQ";
@@ -293,8 +294,13 @@ bool sendCountEvent() {
   }
 
   HTTPClient http;
+  WiFiClientSecure client;
 
-  http.begin(FLASK_API_URL);
+  // Render uses HTTPS. Certificate validation should be replaced with the
+  // Render CA certificate for production deployments.
+  client.setInsecure();
+
+  http.begin(client, FLASK_API_URL);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("X-Device-Key", DEVICE_API_KEY);
   http.setTimeout(3000);
