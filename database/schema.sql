@@ -120,7 +120,15 @@ as $$
             count(*) filter (where count_delta = -1) as total_exited
         from public.person_events
     )
-    select today, week, month, all_time from x;
+    select
+        today,
+        week,
+        month,
+        all_time,
+        current_inside,
+        total_entered,
+        total_exited
+    from x;
 $$;
 
 create or replace function public.get_daily_report(p_days integer default 30)
