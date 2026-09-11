@@ -5,16 +5,16 @@
 <div class="page-head">
     <div>
         <h1>People Counter Dashboard</h1>
-        <p>Valid S1 → S2 crossings recorded by the ESP32.</p>
+        <p>Live occupancy and directional crossings recorded by the ESP32.</p>
     </div>
     <button onclick="loadDashboard()">Refresh</button>
 </div>
 
 <section class="cards">
-    <div class="card"><span>Today</span><strong id="today">0</strong></div>
-    <div class="card"><span>This week</span><strong id="week">0</strong></div>
-    <div class="card"><span>This month</span><strong id="month">0</strong></div>
-    <div class="card"><span>All time</span><strong id="all-time">0</strong></div>
+    <div class="card"><span>Inside now</span><strong id="current-inside">0</strong></div>
+    <div class="card"><span>Entered total</span><strong id="total-entered">0</strong></div>
+    <div class="card"><span>Exited total</span><strong id="total-exited">0</strong></div>
+    <div class="card"><span>Entered today</span><strong id="today">0</strong></div>
 </section>
 
 <section class="panel">
@@ -32,7 +32,7 @@
     <div class="table-wrap">
         <table>
             <thead>
-                <tr><th>Time</th><th>Device</th><th>Sequence</th><th>Count</th></tr>
+                <tr><th>Time</th><th>Device</th><th>Sequence</th><th>Change</th></tr>
             </thead>
             <tbody id="recentBody"></tbody>
         </table>

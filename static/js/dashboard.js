@@ -13,10 +13,10 @@ function fmtTime(value) {
 async function loadDashboard() {
     try {
         const summary = await getJson("/api/summary");
+        document.getElementById("current-inside").textContent = summary.current_inside;
+        document.getElementById("total-entered").textContent = summary.total_entered;
+        document.getElementById("total-exited").textContent = summary.total_exited;
         document.getElementById("today").textContent = summary.today;
-        document.getElementById("week").textContent = summary.week;
-        document.getElementById("month").textContent = summary.month;
-        document.getElementById("all-time").textContent = summary.all_time;
 
         const daily = await getJson("/api/daily?days=30");
 
@@ -27,8 +27,8 @@ async function loadDashboard() {
             data: {
                 labels: daily.map(x => x.day),
                 datasets: [{
-                    label: "People",
-                    data: daily.map(x => x.people),
+                    label: "Net inside change",
+                    data: daily.map(x => x.net),
                     tension: 0.25,
                     fill: false
                 }]
@@ -45,7 +45,7 @@ async function loadDashboard() {
                 <td>${fmtTime(e.event_time)}</td>
                 <td>${e.device_id}</td>
                 <td>${e.sensor_sequence}</td>
-                <td>${e.count_delta}</td>
+                <td>${e.count_delta > 0 ? "+1 entered" : "-1 exited"}</td>
             </tr>
         `).join("");
     } catch (error) {

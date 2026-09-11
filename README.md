@@ -8,9 +8,10 @@ ESP32 sensors -> Wi-Fi -> Flask API -> Supabase PostgreSQL
                                       -> Flask dashboard
                                       -> daily/weekly/monthly reports
 
-The ESP32 only sends an event when the existing S1 -> S2 rule produces a valid count.
-The server stores one immutable event row per counted crossing. Reports are calculated from
-the event timestamps, so historical daily/weekly/monthly reports remain available.
+The ESP32 sends an event for every valid directional crossing: S1 -> S2 means one person
+entered (+1), while S2 -> S1 means one person left (-1). The server stores one immutable
+event row per crossing and derives current occupancy, total entered, total exited, and
+historical daily/weekly/monthly reports from those rows.
 
 ## Important limitation
 
@@ -55,7 +56,8 @@ people_counter_system/
 8. Put your computer and ESP32 on the same network.
 9. Configure Wi-Fi and FLASK_API_URL in the ESP32 sketch.
 10. Upload the ESP32 sketch.
-11. Test S1 -> S2. A valid crossing should create one row in `person_events`.
+11. Test both directions. S1 -> S2 should increase inside by one; S2 -> S1 should decrease
+  inside by one. Both crossings should create immutable rows in `person_events`.
 
 ## Deploy Flask on Render
 

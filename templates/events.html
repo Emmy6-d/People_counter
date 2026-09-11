@@ -5,7 +5,7 @@
 <div class="page-head">
     <div>
         <h1>Recent crossing events</h1>
-        <p>Each row represents one valid S1 → S2 count.</p>
+        <p>Each row represents one valid entry or exit.</p>
     </div>
     <button onclick="loadEvents()">Refresh</button>
 </div>
@@ -16,7 +16,7 @@
             <thead>
                 <tr>
                     <th>ID</th><th>Time</th><th>Device</th>
-                    <th>Event</th><th>Sequence</th><th>Count</th>
+                    <th>Event</th><th>Sequence</th><th>Change</th>
                 </tr>
             </thead>
             <tbody id="eventsBody"></tbody>
@@ -35,7 +35,7 @@ async function loadEvents() {
             <td>${e.device_id}</td>
             <td>${e.event_type}</td>
             <td>${e.sensor_sequence}</td>
-            <td>${e.count_delta}</td>
+            <td>${e.count_delta > 0 ? "+1 entered" : "-1 exited"}</td>
         </tr>
     `).join("");
 }

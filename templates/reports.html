@@ -40,7 +40,7 @@ function replaceChart(oldChart, canvasId, labels, values) {
         type: "bar",
         data: {
             labels,
-            datasets: [{ label: "People", data: values }]
+            datasets: [{ label: "Net inside change", data: values }]
         },
         options: { responsive: true, maintainAspectRatio: false }
     });
@@ -54,15 +54,15 @@ async function loadReports() {
 
         dailyChart = replaceChart(
             dailyChart, "dailyReportChart",
-            daily.map(x => x.day), daily.map(x => x.people)
+            daily.map(x => x.day), daily.map(x => x.net)
         );
         weeklyChart = replaceChart(
             weeklyChart, "weeklyReportChart",
-            weekly.map(x => x.week_start), weekly.map(x => x.people)
+            weekly.map(x => x.week_start), weekly.map(x => x.net)
         );
         monthlyChart = replaceChart(
             monthlyChart, "monthlyReportChart",
-            monthly.map(x => x.month_start), monthly.map(x => x.people)
+            monthly.map(x => x.month_start), monthly.map(x => x.net)
         );
     } catch (e) {
         alert("Could not load reports: " + e.message);

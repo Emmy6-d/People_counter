@@ -55,16 +55,30 @@ def receive_event():
     device_id = str(data.get("device_id", "")).strip()
     event_type = str(data.get("event_type", "valid_s1_to_s2")).strip()
     sensor_sequence = str(data.get("sensor_sequence", "S1->S2")).strip()
-    count_delta = int(data.get("count_delta", 1))
+    try:
+        count_delta = int(data.get("count_delta", 1))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "count_delta must be 1 or -1"}), 400
 
     if not device_id:
         return jsonify({"ok": False, "error": "device_id is required"}), 400
 
-    if count_delta != 1:
-        return jsonify({"ok": False, "error": "count_delta must be 1"}), 400
+    if count_delta not in (1, -1):
+        return jsonify({"ok": False, "error": "count_delta must be 1 or -1"}), 400
 
-    if event_type != "valid_s1_to_s2":
+    expected_events = {
+        "valid_s1_to_s2": ("S1->S2", 1),
+        "valid_s2_to_s1": ("S2->S1", -1),
+    }
+    expected_sequence = expected_events.get(event_type)
+    if expected_sequence is None:
         return jsonify({"ok": False, "error": "unsupported event_type"}), 400
+
+    if (sensor_sequence, count_delta) != expected_sequence:
+        return jsonify({
+            "ok": False,
+            "error": "event_type, sensor_sequence, and count_delta must match",
+        }), 400
 
     # Server time is authoritative. This avoids trusting the ESP32 clock.
     row = {
@@ -96,7 +110,10 @@ def api_summary():
             "today": 0,
             "week": 0,
             "month": 0,
-            "all_time": 0
+            "all_time": 0,
+            "current_inside": 0,
+            "total_entered": 0,
+            "total_exited": 0,
         })
 
     return jsonify(today.data[0])

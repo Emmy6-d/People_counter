@@ -8,14 +8,14 @@
     LCD = I2C 0x27, 16x2
 
   Logic:
-    S1 -> S2 outside the simultaneous window = VALID COUNT
-    S2 -> S1 = NO COUNT
+    S1 -> S2 outside the simultaneous window = person enters (+1)
+    S2 -> S1 outside the simultaneous window = person leaves (-1)
     Same/near-simultaneous = NO COUNT
     One sensor only until timeout = NO COUNT
     After an event, both sensors must clear before a new event.
 
   Network:
-    On every valid S1 -> S2 count, send one POST event to Flask.
+    On every valid directional crossing, send one POST event to Flask.
 */
 
 #include <Wire.h>
@@ -72,7 +72,7 @@ uint8_t firstSensor = 0;
 unsigned long firstTriggerTime = 0;
 
 // Local count shown on LCD.
-unsigned long objectCount = 0;
+long objectCount = 0;
 
 // ---------------- Network retry ----------------
 unsigned long lastWiFiAttempt = 0;
@@ -168,15 +168,26 @@ void loop() {
           tone(PIN_BUZZER, BUZZER_FREQUENCY_HZ, BUZZER_MS);
 
           char line2[17];
-          snprintf(line2, sizeof(line2), "Count: %lu", objectCount);
+          snprintf(line2, sizeof(line2), "Inside: %ld", objectCount);
           updateLCD("Counted!", line2);
 
-          // The important part: one database event per valid count.
-          sendCountEvent();
+          // The important part: one database event per valid crossing.
+          sendCountEvent("valid_s1_to_s2", "S1->S2", 1);
 
         } else {
-          Serial.println("S2->S1 -> wrong direction, no count.");
-          updateLCD("No Count", "Wrong Direction");
+          if (objectCount > 0) {
+            objectCount--;
+          }
+
+          Serial.print("VALID S2->S1. Local count = ");
+          Serial.println(objectCount);
+          tone(PIN_BUZZER, BUZZER_FREQUENCY_HZ, BUZZER_MS);
+
+          char line2[17];
+          snprintf(line2, sizeof(line2), "Inside: %ld", objectCount);
+          updateLCD("Left", line2);
+
+          sendCountEvent("valid_s2_to_s1", "S2->S1", -1);
         }
 
         eventState = WAIT_FOR_CLEAR;
@@ -197,7 +208,7 @@ void loop() {
         eventState = WAIT_FOR_FIRST;
 
         char line2[17];
-        snprintf(line2, sizeof(line2), "Count: %lu", objectCount);
+        snprintf(line2, sizeof(line2), "Inside: %ld", objectCount);
         updateLCD("Ready", line2);
 
         Serial.println("Sensors cleared. Ready for next person.");
@@ -286,7 +297,7 @@ void maintainWiFi() {
 // Send one valid event to Flask
 // =====================================================
 
-bool sendCountEvent() {
+bool sendCountEvent(const char *eventType, const char *sensorSequence, int countDelta) {
 
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("EVENT NOT SENT: Wi-Fi disconnected.");
@@ -308,9 +319,9 @@ bool sendCountEvent() {
   String payload =
     String("{") +
     "\"device_id\":\"" + DEVICE_ID + "\"," +
-    "\"event_type\":\"valid_s1_to_s2\"," +
-    "\"sensor_sequence\":\"S1->S2\"," +
-    "\"count_delta\":1" +
+    "\"event_type\":\"" + eventType + "\"," +
+    "\"sensor_sequence\":\"" + sensorSequence + "\"," +
+    "\"count_delta\":" + String(countDelta) +
     "}";
 
   Serial.println("Sending event to Flask...");
