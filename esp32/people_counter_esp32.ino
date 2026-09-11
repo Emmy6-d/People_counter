@@ -99,7 +99,7 @@ void setup() {
   // Server timestamps events, but NTP is useful for diagnostics.
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
 
-  updateLCD("System Ready", "Count: 0");
+  updateLCD("System Ready", "Inside: 0");
   Serial.println("System ready.");
 }
 
@@ -155,6 +155,7 @@ void loop() {
         if (elapsed <= SIMULTANEOUS_WINDOW_MS) {
           Serial.println("Second sensor within tolerance -> no count.");
           updateLCD("No Count", "Simultaneous");
+          eventState = WAIT_FOR_CLEAR;
 
         } else if (firstSensor == 1) {
 
