@@ -70,7 +70,12 @@ EventState eventState = WAIT_FOR_FIRST;
 uint8_t firstSensor = 0;
 unsigned long firstTriggerTime = 0;
 
-// Local count shown on LCD.
+// Set this to the maximum number of people the monitored area can hold.
+const long MAX_CAPACITY = 50;
+
+// Local totals shown on the LCD. They reset when the ESP32 restarts.
+long enteredCount = 0;
+long exitedCount = 0;
 long objectCount = 0;
 
 // ---------------- Network retry ----------------
@@ -98,7 +103,7 @@ void setup() {
   // Server timestamps events, but NTP is useful for diagnostics.
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
 
-  updateLCD("System Ready", "Inside: 0");
+  updateLCDDashboard();
   Serial.println("System ready.");
 }
 
@@ -158,6 +163,7 @@ void loop() {
 
         } else if (firstSensor == 1) {
 
+          enteredCount++;
           objectCount++;
 
           Serial.print("VALID S1->S2. Local count = ");
@@ -167,9 +173,7 @@ void loop() {
           // tone(), so the Flask request cannot extend or suppress the beep.
           tone(PIN_BUZZER, BUZZER_FREQUENCY_HZ, BUZZER_MS);
 
-          char line2[17];
-          snprintf(line2, sizeof(line2), "Inside: %ld", objectCount);
-          updateLCD("Counted!", line2);
+          updateLCDDashboard();
 
           // The important part: one database event per valid crossing.
           sendCountEvent("valid_s1_to_s2", "S1->S2", 1);
@@ -178,14 +182,13 @@ void loop() {
           if (objectCount > 0) {
             objectCount--;
           }
+          exitedCount++;
 
           Serial.print("VALID S2->S1. Local count = ");
           Serial.println(objectCount);
           tone(PIN_BUZZER, BUZZER_FREQUENCY_HZ, BUZZER_MS);
 
-          char line2[17];
-          snprintf(line2, sizeof(line2), "Inside: %ld", objectCount);
-          updateLCD("Left", line2);
+          updateLCDDashboard();
 
           sendCountEvent("valid_s2_to_s1", "S2->S1", -1);
         }
@@ -207,9 +210,7 @@ void loop() {
       if (s1Debounced == HIGH && s2Debounced == HIGH) {
         eventState = WAIT_FOR_FIRST;
 
-        char line2[17];
-        snprintf(line2, sizeof(line2), "Inside: %ld", objectCount);
-        updateLCD("Ready", line2);
+        updateLCDDashboard();
 
         Serial.println("Sensors cleared. Ready for next person.");
       }
@@ -249,6 +250,21 @@ void updateLCD(const char *line1, const char *line2) {
   lcd.print(line1);
   lcd.setCursor(0, 1);
   lcd.print(line2);
+}
+
+void updateLCDDashboard() {
+  long remaining = MAX_CAPACITY - objectCount;
+
+  if (remaining < 0) {
+    remaining = 0;
+  }
+
+  char line1[17];
+  char line2[17];
+  snprintf(line1, sizeof(line1), "IN:%4ld OUT:%4ld", enteredCount, exitedCount);
+  snprintf(line2, sizeof(line2), "NOW:%4ld REM:%3ld", objectCount, remaining);
+
+  updateLCD(line1, line2);
 }
 
 // =====================================================
