@@ -10,6 +10,17 @@ function fmtTime(value) {
     return new Date(value).toLocaleString();
 }
 
+async function loadSensorStatus() {
+    try {
+        const status = await getJson("/api/status");
+        const statusElement = document.getElementById("sensor-status");
+        statusElement.textContent = status.status;
+        statusElement.dataset.status = status.status;
+    } catch (error) {
+        console.error(error);
+    }
+}
+
 async function loadDashboard() {
     try {
         const summary = await getJson("/api/summary");
@@ -55,4 +66,6 @@ async function loadDashboard() {
 }
 
 loadDashboard();
+loadSensorStatus();
 setInterval(loadDashboard, 30000);
+setInterval(loadSensorStatus, 1000);

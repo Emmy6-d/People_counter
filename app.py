@@ -7,6 +7,12 @@ import config
 app = Flask(__name__)
 app.config["SECRET_KEY"] = config.FLASK_SECRET_KEY
 
+sensor_status = {
+    "status": "OK",
+    "device_id": None,
+    "updated_at": None,
+}
+
 supabase = create_client(
     config.SUPABASE_URL,
     config.SUPABASE_SERVICE_ROLE_KEY
@@ -47,6 +53,31 @@ def health():
     return jsonify({"ok": True, "service": "people-counter-api"})
 
 
+@app.post("/api/device/status")
+@device_auth_required
+def receive_status():
+    data = request.get_json(silent=True) or {}
+    status = str(data.get("status", "")).strip()
+    device_id = str(data.get("device_id", "")).strip()
+
+    if status not in {"S1", "S2", "Both", "OK"}:
+        return jsonify({"ok": False, "error": "Invalid sensor status"}), 400
+    if not device_id:
+        return jsonify({"ok": False, "error": "device_id is required"}), 400
+
+    sensor_status.update({
+        "status": status,
+        "device_id": device_id,
+        "updated_at": utc_now_iso(),
+    })
+    return jsonify({"ok": True}), 200
+
+
+@app.get("/api/status")
+def api_status():
+    return jsonify(sensor_status)
+
+
 @app.post("/api/device/event")
 @device_auth_required
 def receive_event():
@@ -79,6 +110,15 @@ def receive_event():
             "ok": False,
             "error": "event_type, sensor_sequence, and count_delta must match",
         }), 400
+
+    if count_delta == -1:
+        summary = supabase.rpc("get_counter_summary", {}).execute()
+        current_inside = int((summary.data or [{"current_inside": 0}])[0]["current_inside"])
+        if current_inside <= 0:
+            return jsonify({
+                "ok": False,
+                "error": "Exit ignored because nobody is inside",
+            }), 409
 
     # Server time is authoritative. This avoids trusting the ESP32 clock.
     row = {

@@ -23,6 +23,9 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <time.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+#include <freertos/task.h>
 
 // ---------------- Hardware ----------------
 const uint8_t PIN_S1     = 34;
@@ -50,6 +53,7 @@ const unsigned long SIMULTANEOUS_WINDOW_MS = 100;
 const unsigned long DETECTION_TIMEOUT_MS   = 10000;
 const unsigned long BUZZER_MS              = 200;
 const unsigned int BUZZER_FREQUENCY_HZ     = 2000;
+const unsigned long HTTP_TIMEOUT_MS        = 800;
 
 // ---------------- Debounce ----------------
 bool s1RawLast = HIGH, s2RawLast = HIGH;
@@ -70,9 +74,6 @@ EventState eventState = WAIT_FOR_FIRST;
 uint8_t firstSensor = 0;
 unsigned long firstTriggerTime = 0;
 
-// Set this to the maximum number of people the monitored area can hold.
-const long MAX_CAPACITY = 50;
-
 // Local totals shown on the LCD. They reset when the ESP32 restarts.
 long enteredCount = 0;
 long exitedCount = 0;
@@ -81,6 +82,19 @@ long objectCount = 0;
 // ---------------- Network retry ----------------
 unsigned long lastWiFiAttempt = 0;
 const unsigned long WIFI_RETRY_MS = 10000;
+bool statusNeedsUpdate = true;
+bool lastReportedS1 = HIGH;
+bool lastReportedS2 = HIGH;
+
+struct NetworkMessage {
+  bool isStatus;
+  char eventType[24];
+  char sensorSequence[8];
+  char status[5];
+  int countDelta;
+};
+
+QueueHandle_t networkQueue;
 
 // =====================================================
 
@@ -99,6 +113,17 @@ void setup() {
   updateLCD("Starting...", "Please wait");
 
   connectWiFi();
+
+  networkQueue = xQueueCreate(8, sizeof(NetworkMessage));
+  xTaskCreatePinnedToCore(
+    networkTask,
+    "networkTask",
+    8192,
+    nullptr,
+    1,
+    nullptr,
+    0
+  );
 
   // Server timestamps events, but NTP is useful for diagnostics.
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
@@ -130,20 +155,17 @@ void loop() {
       if (s1Rose && s2Rose) {
         Serial.println("Both triggered same cycle -> no count.");
         eventState = WAIT_FOR_CLEAR;
-        updateLCD("No Count", "Simultaneous");
 
       } else if (s1Rose) {
         firstSensor = 1;
         firstTriggerTime = now;
         eventState = WAIT_FOR_SECOND;
-        updateLCD("S1 Detected", "Waiting S2...");
         Serial.println("S1 triggered first.");
 
       } else if (s2Rose) {
         firstSensor = 2;
         firstTriggerTime = now;
         eventState = WAIT_FOR_SECOND;
-        updateLCD("S2 Detected", "Waiting S1...");
         Serial.println("S2 triggered first.");
       }
 
@@ -158,7 +180,6 @@ void loop() {
 
         if (elapsed <= SIMULTANEOUS_WINDOW_MS) {
           Serial.println("Second sensor within tolerance -> no count.");
-          updateLCD("No Count", "Simultaneous");
           eventState = WAIT_FOR_CLEAR;
 
         } else if (firstSensor == 1) {
@@ -173,24 +194,22 @@ void loop() {
           // tone(), so the Flask request cannot extend or suppress the beep.
           tone(PIN_BUZZER, BUZZER_FREQUENCY_HZ, BUZZER_MS);
 
-          updateLCDDashboard();
-
           // The important part: one database event per valid crossing.
           sendCountEvent("valid_s1_to_s2", "S1->S2", 1);
 
         } else {
           if (objectCount > 0) {
             objectCount--;
+            exitedCount++;
+
+            Serial.print("VALID S2->S1. Local count = ");
+            Serial.println(objectCount);
+            tone(PIN_BUZZER, BUZZER_FREQUENCY_HZ, BUZZER_MS);
+
+            sendCountEvent("valid_s2_to_s1", "S2->S1", -1);
+          } else {
+            Serial.println("S2->S1 ignored: nobody is inside.");
           }
-          exitedCount++;
-
-          Serial.print("VALID S2->S1. Local count = ");
-          Serial.println(objectCount);
-          tone(PIN_BUZZER, BUZZER_FREQUENCY_HZ, BUZZER_MS);
-
-          updateLCDDashboard();
-
-          sendCountEvent("valid_s2_to_s1", "S2->S1", -1);
         }
 
         eventState = WAIT_FOR_CLEAR;
@@ -198,7 +217,6 @@ void loop() {
       } else if (elapsed > DETECTION_TIMEOUT_MS) {
 
         Serial.println("Timeout waiting for second sensor -> no count.");
-        updateLCD("No Count", "Timeout");
         eventState = WAIT_FOR_CLEAR;
       }
 
@@ -210,12 +228,24 @@ void loop() {
       if (s1Debounced == HIGH && s2Debounced == HIGH) {
         eventState = WAIT_FOR_FIRST;
 
-        updateLCDDashboard();
-
         Serial.println("Sensors cleared. Ready for next person.");
       }
 
       break;
+  }
+
+  if (s1Debounced != s1PrevStable || s2Debounced != s2PrevStable) {
+    updateLCDDashboard();
+  }
+
+  if (statusNeedsUpdate ||
+      s1Debounced != lastReportedS1 ||
+      s2Debounced != lastReportedS2) {
+    if (sendSensorStatus()) {
+      lastReportedS1 = s1Debounced;
+      lastReportedS2 = s2Debounced;
+      statusNeedsUpdate = false;
+    }
   }
 
   s1PrevStable = s1Debounced;
@@ -253,16 +283,20 @@ void updateLCD(const char *line1, const char *line2) {
 }
 
 void updateLCDDashboard() {
-  long remaining = MAX_CAPACITY - objectCount;
-
-  if (remaining < 0) {
-    remaining = 0;
-  }
-
   char line1[17];
   char line2[17];
+  const char *status = "OK";
+
+  if (s1Debounced == LOW && s2Debounced == LOW) {
+    status = "Both";
+  } else if (s1Debounced == LOW) {
+    status = "S1";
+  } else if (s2Debounced == LOW) {
+    status = "S2";
+  }
+
   snprintf(line1, sizeof(line1), "IN:%4ld OUT:%4ld", enteredCount, exitedCount);
-  snprintf(line2, sizeof(line2), "NOW:%4ld REM:%3ld", objectCount, remaining);
+  snprintf(line2, sizeof(line2), "NOW:%4ld ST:%4s", objectCount, status);
 
   updateLCD(line1, line2);
 }
@@ -313,48 +347,83 @@ void maintainWiFi() {
 // Send one valid event to Flask
 // =====================================================
 
-bool sendCountEvent(const char *eventType, const char *sensorSequence, int countDelta) {
-
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("EVENT NOT SENT: Wi-Fi disconnected.");
+bool queueNetworkMessage(const NetworkMessage &message) {
+  if (networkQueue == nullptr) {
     return false;
   }
 
-  HTTPClient http;
-  WiFiClient client;
+  return xQueueSend(networkQueue, &message, 0) == pdTRUE;
+}
 
-  http.begin(client, FLASK_API_URL);
-  http.addHeader("Content-Type", "application/json");
-  http.addHeader("X-Device-Key", DEVICE_API_KEY);
-  http.setTimeout(3000);
+bool sendCountEvent(const char *eventType, const char *sensorSequence, int countDelta) {
+  NetworkMessage message = {};
+  message.isStatus = false;
+  message.countDelta = countDelta;
+  snprintf(message.eventType, sizeof(message.eventType), "%s", eventType);
+  snprintf(message.sensorSequence, sizeof(message.sensorSequence), "%s", sensorSequence);
+  return queueNetworkMessage(message);
+}
 
-  String payload =
-    String("{") +
-    "\"device_id\":\"" + DEVICE_ID + "\"," +
-    "\"event_type\":\"" + eventType + "\"," +
-    "\"sensor_sequence\":\"" + sensorSequence + "\"," +
-    "\"count_delta\":" + String(countDelta) +
-    "}";
-
-  Serial.println("Sending event to Flask...");
-
-  int httpCode = http.POST(payload);
-
-  if (httpCode > 0) {
-    Serial.print("Flask HTTP code: ");
-    Serial.println(httpCode);
-
-    String response = http.getString();
-    Serial.println(response);
-
-    http.end();
-
-    return (httpCode >= 200 && httpCode < 300);
+bool sendSensorStatus() {
+  const char *status = "OK";
+  if (s1Debounced == LOW && s2Debounced == LOW) {
+    status = "Both";
+  } else if (s1Debounced == LOW) {
+    status = "S1";
+  } else if (s2Debounced == LOW) {
+    status = "S2";
   }
 
-  Serial.print("HTTP error: ");
-  Serial.println(http.errorToString(httpCode));
+  NetworkMessage message = {};
+  message.isStatus = true;
+  snprintf(message.status, sizeof(message.status), "%s", status);
+  return queueNetworkMessage(message);
+}
 
-  http.end();
-  return false;
+void networkTask(void *parameter) {
+  NetworkMessage message;
+
+  for (;;) {
+    if (xQueueReceive(networkQueue, &message, portMAX_DELAY) != pdTRUE) {
+      continue;
+    }
+
+    if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("Network message skipped: Wi-Fi disconnected.");
+      continue;
+    }
+
+    HTTPClient http;
+    WiFiClient client;
+    String url = String(FLASK_API_URL);
+
+    if (message.isStatus) {
+      url.replace("/api/device/event", "/api/device/status");
+    }
+
+    http.begin(client, url);
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("X-Device-Key", DEVICE_API_KEY);
+    http.setTimeout(HTTP_TIMEOUT_MS);
+
+    String payload;
+    if (message.isStatus) {
+      payload = String("{\"device_id\":\"") + DEVICE_ID +
+                "\",\"status\":\"" + message.status + "\"}";
+    } else {
+      payload = String("{") +
+                "\"device_id\":\"" + DEVICE_ID + "\"," +
+                "\"event_type\":\"" + message.eventType + "\"," +
+                "\"sensor_sequence\":\"" + message.sensorSequence + "\"," +
+                "\"count_delta\":" + String(message.countDelta) +
+                "}";
+    }
+
+    int httpCode = http.POST(payload);
+    if (httpCode <= 0) {
+      Serial.print("HTTP error: ");
+      Serial.println(http.errorToString(httpCode));
+    }
+    http.end();
+  }
 }
