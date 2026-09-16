@@ -21,6 +21,7 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <time.h>
 #include <freertos/FreeRTOS.h>
@@ -38,9 +39,9 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 const char* WIFI_SSID     = "Emmy";
 const char* WIFI_PASSWORD = "Emmanuel";
 
-// Use the host computer's LAN address while Flask is running locally.
+// Render HTTPS endpoint.
 const char* FLASK_API_URL =
-  "http://192.168.85.65:5000/api/device/event";
+  "https://people-counter-api-2tn2.onrender.com/api/device/event";
 
 // Must match DEVICE_API_KEY in Flask .env
 const char* DEVICE_API_KEY = "fDr15jScnzBpcQV6vlteQbcPtlZ70T14m6C2YsCOQyQ";
@@ -53,7 +54,8 @@ const unsigned long SIMULTANEOUS_WINDOW_MS = 100;
 const unsigned long DETECTION_TIMEOUT_MS   = 10000;
 const unsigned long BUZZER_MS              = 200;
 const unsigned int BUZZER_FREQUENCY_HZ     = 2000;
-const unsigned long HTTP_TIMEOUT_MS        = 800;
+// Render may need several seconds to wake after inactivity.
+const unsigned long HTTP_TIMEOUT_MS        = 10000;
 
 // ---------------- Debounce ----------------
 bool s1RawLast = HIGH, s2RawLast = HIGH;
@@ -181,16 +183,12 @@ void loop() {
 
       if (secondRose) {
 
-        if (elapsed <= SIMULTANEOUS_WINDOW_MS) {
-          Serial.println("Second sensor within tolerance -> no count.");
-          eventState = WAIT_FOR_CLEAR;
-
-        } else if (firstSensor == 1) {
+        if (firstSensor == 1) {
 
           enteredCount++;
           objectCount++;
 
-          Serial.print("VALID S1->S2. Local count = ");
+          Serial.print("VALID S1->S2. Entered. Local count = ");
           Serial.println(objectCount);
 
           // Start immediately on a valid count. The duration is handled by
@@ -205,7 +203,7 @@ void loop() {
             objectCount--;
             exitedCount++;
 
-            Serial.print("VALID S2->S1. Local count = ");
+            Serial.print("VALID S2->S1. Exited. Local count = ");
             Serial.println(objectCount);
             tone(PIN_BUZZER, BUZZER_FREQUENCY_HZ, BUZZER_MS);
 
@@ -397,7 +395,8 @@ void networkTask(void *parameter) {
     }
 
     HTTPClient http;
-    WiFiClient client;
+    WiFiClientSecure client;
+    client.setInsecure();
     String url = String(FLASK_API_URL);
 
     if (message.isStatus) {
