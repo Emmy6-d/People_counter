@@ -40,7 +40,7 @@ const char* WIFI_PASSWORD = "Emmanuel";
 
 // Use the host computer's LAN address while Flask is running locally.
 const char* FLASK_API_URL =
-  "http://192.168.48.65:5000/api/device/event";
+  "http://192.168.85.65:5000/api/device/event";
 
 // Must match DEVICE_API_KEY in Flask .env
 const char* DEVICE_API_KEY = "fDr15jScnzBpcQV6vlteQbcPtlZ70T14m6C2YsCOQyQ";
@@ -105,6 +105,9 @@ void setup() {
   pinMode(PIN_S2, INPUT);
   pinMode(PIN_BUZZER, OUTPUT);
   digitalWrite(PIN_BUZZER, LOW);
+
+  // Keep the Wi-Fi radio awake so local HTTP requests do not wait for wake-up.
+  WiFi.setSleep(false);
 
   Wire.begin();
   lcd.init();
