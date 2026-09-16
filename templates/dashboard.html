@@ -5,29 +5,29 @@
 <div class="page-head">
     <div>
         <h1>People Counter Dashboard</h1>
-        <p>Live occupancy and directional crossings recorded by the ESP32.</p>
+        <p>Today’s occupancy and directional crossings.</p>
     </div>
     <button onclick="loadDashboard()">Refresh</button>
 </div>
 
 <section class="cards">
-    <div class="card"><span>Inside now</span><strong id="current-inside">0</strong></div>
-    <div class="card"><span>Entered total</span><strong id="total-entered">0</strong></div>
-    <div class="card"><span>Exited total</span><strong id="total-exited">0</strong></div>
-    <div class="card"><span>Entered today</span><strong id="today">0</strong></div>
+    <div class="card"><span>Inside</span><strong id="current-inside">0</strong></div>
+    <div class="card"><span>Entered today</span><strong id="total-entered">0</strong></div>
+    <div class="card"><span>Exited today</span><strong id="total-exited">0</strong></div>
+    <div class="card"><span>Total crossings today</span><strong id="today">0</strong></div>
     <div class="card"><span>Sensor status</span><strong id="sensor-status">OK</strong></div>
 </section>
 
 <section class="panel">
     <div class="panel-head">
-        <h2>Last 30 days</h2>
+        <h2>Today’s movement</h2>
     </div>
-    <canvas id="dailyChart"></canvas>
+    <p id="daily-summary">Loading today’s data...</p>
 </section>
 
 <section class="panel">
     <div class="panel-head">
-        <h2>Recent events</h2>
+        <h2>Today’s events</h2>
         <a href="/events">View all recent events</a>
     </div>
     <div class="table-wrap">

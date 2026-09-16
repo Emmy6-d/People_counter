@@ -5,10 +5,34 @@
 <div class="page-head">
     <div>
         <h1>Reports</h1>
-        <p>Historical totals are calculated from immutable crossing events.</p>
+        <p>Choose a day to view its occupancy, movement totals, and event list.</p>
     </div>
     <button onclick="loadReports()">Refresh</button>
 </div>
+
+<section class="panel filter-panel">
+    <label for="report-date">Daily report date</label>
+    <input id="report-date" type="date">
+    <button onclick="loadDailyReport()">Show day</button>
+</section>
+
+<section class="cards">
+    <div class="card"><span>Inside at end of day</span><strong id="day-inside">0</strong></div>
+    <div class="card"><span>Entered</span><strong id="day-entered">0</strong></div>
+    <div class="card"><span>Exited</span><strong id="day-exited">0</strong></div>
+    <div class="card"><span>Net change</span><strong id="day-net">0</strong></div>
+    <div class="card"><span>Total crossings</span><strong id="day-total">0</strong></div>
+</section>
+
+<section class="panel">
+    <h2 id="daily-title">Daily events</h2>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Time</th><th>Device</th><th>Sequence</th><th>Change</th></tr></thead>
+            <tbody id="dailyEventsBody"></tbody>
+        </table>
+    </div>
+</section>
 
 <section class="panel">
     <h2>Daily report</h2>
@@ -76,6 +100,33 @@ async function loadReports() {
     }
 }
 
+async function loadDailyReport() {
+    try {
+        const selectedDate = document.getElementById("report-date").value;
+        const daily = await getJson(`/api/day?date=${selectedDate}`);
+        document.getElementById("day-inside").textContent = daily.inside;
+        document.getElementById("day-entered").textContent = daily.entered;
+        document.getElementById("day-exited").textContent = daily.exited;
+        document.getElementById("day-net").textContent = daily.net;
+        document.getElementById("day-total").textContent = daily.total_events;
+        document.getElementById("daily-title").textContent = `Events for ${daily.date}`;
+        document.getElementById("dailyEventsBody").innerHTML = daily.events.map(e => `
+            <tr>
+                <td>${new Date(e.event_time).toLocaleString()}</td>
+                <td>${e.device_id}</td>
+                <td>${e.sensor_sequence}</td>
+                <td>${e.count_delta > 0 ? "+1 entered" : "-1 exited"}</td>
+            </tr>
+        `).join("");
+    } catch (error) {
+        console.error(error);
+        showMessage("The selected day is temporarily unavailable. Please try again.");
+    }
+}
+
+const today = new Date().toISOString().slice(0, 10);
+document.getElementById("report-date").value = today;
+loadDailyReport();
 loadReports();
 </script>
 {% endblock %}

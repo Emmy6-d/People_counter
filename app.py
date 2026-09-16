@@ -1,7 +1,8 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from functools import wraps
 from flask import Flask, jsonify, render_template, request, abort
 from supabase import create_client
+from zoneinfo import ZoneInfo
 import config
 
 app = Flask(__name__)
@@ -76,6 +77,49 @@ def receive_status():
 @app.get("/api/status")
 def api_status():
     return jsonify(sensor_status)
+
+
+@app.get("/api/day")
+def api_day():
+    requested_date = request.args.get("date")
+    try:
+        selected_date = date.fromisoformat(requested_date) if requested_date else datetime.now(
+            ZoneInfo("Africa/Kigali")
+        ).date()
+    except ValueError:
+        return jsonify({"ok": False, "error": "date must use YYYY-MM-DD format"}), 400
+
+    local_zone = ZoneInfo("Africa/Kigali")
+    start_local = datetime.combine(selected_date, datetime.min.time(), tzinfo=local_zone)
+    end_local = start_local + timedelta(days=1)
+    result = (
+        supabase.table("person_events")
+        .select("id,device_id,event_type,sensor_sequence,count_delta,event_time")
+        .lt("event_time", end_local.astimezone(timezone.utc).isoformat())
+        .order("event_time", desc=False)
+        .execute()
+    )
+
+    all_events = result.data or []
+    day_events = []
+    inside_at_end = 0
+    for event in all_events:
+        event_time = datetime.fromisoformat(event["event_time"].replace("Z", "+00:00"))
+        inside_at_end += int(event["count_delta"])
+        if start_local <= event_time.astimezone(local_zone) < end_local:
+            day_events.append(event)
+
+    entered = sum(1 for event in day_events if event["count_delta"] == 1)
+    exited = sum(1 for event in day_events if event["count_delta"] == -1)
+    return jsonify({
+        "date": selected_date.isoformat(),
+        "inside": max(inside_at_end, 0),
+        "entered": entered,
+        "exited": exited,
+        "net": entered - exited,
+        "total_events": len(day_events),
+        "events": list(reversed(day_events)),
+    })
 
 
 @app.post("/api/device/event")
