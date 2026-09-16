@@ -10,6 +10,12 @@ function fmtTime(value) {
     return new Date(value).toLocaleString();
 }
 
+function showMessage(message) {
+    const messageElement = document.getElementById("app-message");
+    messageElement.textContent = message;
+    messageElement.hidden = false;
+}
+
 async function loadSensorStatus() {
     try {
         const status = await getJson("/api/status");
@@ -61,7 +67,7 @@ async function loadDashboard() {
         `).join("");
     } catch (error) {
         console.error(error);
-        alert("Dashboard error: " + error.message);
+        showMessage("Dashboard data is temporarily unavailable. Retrying automatically.");
     }
 }
 

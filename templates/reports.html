@@ -46,6 +46,12 @@ function replaceChart(oldChart, canvasId, labels, values) {
     });
 }
 
+function showMessage(message) {
+    const messageElement = document.getElementById("app-message");
+    messageElement.textContent = message;
+    messageElement.hidden = false;
+}
+
 async function loadReports() {
     try {
         const daily = await getJson("/api/daily?days=30");
@@ -65,7 +71,8 @@ async function loadReports() {
             monthly.map(x => x.month_start), monthly.map(x => x.net)
         );
     } catch (e) {
-        alert("Could not load reports: " + e.message);
+        console.error(e);
+        showMessage("Reports are temporarily unavailable. Please try again shortly.");
     }
 }
 
