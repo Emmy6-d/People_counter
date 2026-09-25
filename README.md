@@ -59,6 +59,18 @@ people_counter_system/
 11. Test both directions. S1 -> S2 should increase inside by one; S2 -> S1 should decrease
   inside by one. Both crossings should create immutable rows in `person_events`.
 
+## MH IR sensor wiring
+
+Use two 3-pin MH-series digital IR sensor modules:
+
+- Sensor 1: `VCC -> 3.3V`, `GND -> GND`, `OUT -> GPIO32`
+- Sensor 2: `VCC -> 3.3V`, `GND -> GND`, `OUT -> GPIO33`
+
+The firmware enables the ESP32 internal pull-ups and expects the MH module output
+to be active-LOW: `LOW` means an object is detected and `HIGH` means clear.
+Adjust each module's potentiometer so its OUT pin is HIGH with no object present.
+The counter state machine and directional logic are unchanged.
+
 ## Deploy Flask on Render
 
 1. Push this repository to GitHub, including `render.yaml`.
