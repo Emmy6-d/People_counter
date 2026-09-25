@@ -2,14 +2,13 @@
   ESP32 Dual-Sensor Directional People Counter
   ------------------------------------------------
   Hardware:
-    MH IR sensor 1: VCC = 3.3V, GND = GND, OUT = GPIO 32
-    MH IR sensor 2: VCC = 3.3V, GND = GND, OUT = GPIO 33
+    HC-SR04 sensor 1: VCC = 5V, GND = GND, TRIG = GPIO 32, ECHO = GPIO 33
+    HC-SR04 sensor 2: VCC = 5V, GND = GND, TRIG = GPIO 26, ECHO = GPIO 27
     Buzzer = GPIO 25
     LCD = I2C 0x27, 16x2
 
-  MH sensor modules must provide a digital OUT signal that is LOW when
-  an object is detected. Their comparator threshold is adjusted on the
-  module potentiometer.
+  HC-SR04 ECHO signals must be reduced to 3.3V with a voltage divider
+  before connecting them to the ESP32 GPIO pins.
 
   Logic:
     S1 -> S2 outside the simultaneous window = person enters (+1)
@@ -33,10 +32,14 @@
 #include <freertos/task.h>
 
 // ---------------- Hardware ----------------
-// GPIO32 and GPIO33 support INPUT_PULLUP for the active-LOW MH sensor outputs.
-const uint8_t PIN_S1     = 32;
-const uint8_t PIN_S2     = 33;
+const uint8_t PIN_S1_TRIG = 32;
+const uint8_t PIN_S1_ECHO = 33;
+const uint8_t PIN_S2_TRIG = 26;
+const uint8_t PIN_S2_ECHO = 27;
 const uint8_t PIN_BUZZER = 25;
+
+const unsigned long ULTRASONIC_TIMEOUT_US = 25000;
+const float DETECTION_DISTANCE_CM = 150.0;
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
@@ -108,8 +111,12 @@ QueueHandle_t networkQueue;
 void setup() {
   Serial.begin(115200);
 
-  pinMode(PIN_S1, INPUT_PULLUP);
-  pinMode(PIN_S2, INPUT_PULLUP);
+  pinMode(PIN_S1_TRIG, OUTPUT);
+  pinMode(PIN_S1_ECHO, INPUT);
+  pinMode(PIN_S2_TRIG, OUTPUT);
+  pinMode(PIN_S2_ECHO, INPUT);
+  digitalWrite(PIN_S1_TRIG, LOW);
+  digitalWrite(PIN_S2_TRIG, LOW);
   pinMode(PIN_BUZZER, OUTPUT);
   digitalWrite(PIN_BUZZER, LOW);
 
@@ -148,11 +155,13 @@ void loop() {
   maintainWiFi();
 
   updateDebounce(
-    PIN_S1, s1RawLast, s1Debounced, s1DebounceTimer, now
+    PIN_S1_TRIG, PIN_S1_ECHO,
+    s1RawLast, s1Debounced, s1DebounceTimer, now
   );
 
   updateDebounce(
-    PIN_S2, s2RawLast, s2Debounced, s2DebounceTimer, now
+    PIN_S2_TRIG, PIN_S2_ECHO,
+    s2RawLast, s2Debounced, s2DebounceTimer, now
   );
 
   bool s1Rose = (s1Debounced == LOW && s1PrevStable == HIGH);
@@ -262,13 +271,14 @@ void loop() {
 // =====================================================
 
 void updateDebounce(
-  uint8_t pin,
+  uint8_t triggerPin,
+  uint8_t echoPin,
   bool &rawLast,
   bool &debouncedState,
   unsigned long &timer,
   unsigned long now
 ) {
-  bool raw = digitalRead(pin);
+  bool raw = readUltrasonicState(triggerPin, echoPin);
 
   if (raw != rawLast) {
     timer = now;
@@ -278,6 +288,25 @@ void updateDebounce(
   if ((now - timer) >= DEBOUNCE_MS) {
     debouncedState = raw;
   }
+}
+
+bool readUltrasonicState(uint8_t triggerPin, uint8_t echoPin) {
+  digitalWrite(triggerPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(triggerPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(triggerPin, LOW);
+
+  unsigned long duration = pulseIn(
+    echoPin, HIGH, ULTRASONIC_TIMEOUT_US
+  );
+
+  if (duration == 0) {
+    return HIGH;
+  }
+
+  float distanceCm = (duration * 0.0343f) / 2.0f;
+  return distanceCm <= DETECTION_DISTANCE_CM ? LOW : HIGH;
 }
 
 void updateLCD(const char *line1, const char *line2) {

@@ -59,17 +59,17 @@ people_counter_system/
 11. Test both directions. S1 -> S2 should increase inside by one; S2 -> S1 should decrease
   inside by one. Both crossings should create immutable rows in `person_events`.
 
-## MH IR sensor wiring
+## HC-SR04 sensor wiring
 
-Use two 3-pin MH-series digital IR sensor modules:
+Use two HC-SR04 ultrasonic sensors:
 
-- Sensor 1: `VCC -> 3.3V`, `GND -> GND`, `OUT -> GPIO32`
-- Sensor 2: `VCC -> 3.3V`, `GND -> GND`, `OUT -> GPIO33`
+- Sensor 1: `VCC -> 5V`, `GND -> GND`, `TRIG -> GPIO32`, `ECHO -> GPIO33`
+- Sensor 2: `VCC -> 5V`, `GND -> GND`, `TRIG -> GPIO26`, `ECHO -> GPIO27`
 
-The firmware enables the ESP32 internal pull-ups and expects the MH module output
-to be active-LOW: `LOW` means an object is detected and `HIGH` means clear.
-Adjust each module's potentiometer so its OUT pin is HIGH with no object present.
-The counter state machine and directional logic are unchanged.
+The HC-SR04 ECHO output can be 5V. Use a voltage divider on each ECHO line
+so the ESP32 receives no more than 3.3V. The firmware treats an object within
+150 cm as detected and converts that result to the same internal sensor state
+used by the original counter logic. The directional state machine is unchanged.
 
 ## Deploy Flask on Render
 
