@@ -2,8 +2,8 @@
   ESP32 Dual-Sensor Directional People Counter
   ------------------------------------------------
   Hardware:
-    S1 = GPIO 34
-    S2 = GPIO 35
+    S1 = GPIO 32
+    S2 = GPIO 33
     Buzzer = GPIO 25
     LCD = I2C 0x27, 16x2
 
@@ -29,8 +29,10 @@
 #include <freertos/task.h>
 
 // ---------------- Hardware ----------------
-const uint8_t PIN_S1     = 34;
-const uint8_t PIN_S2     = 35;
+// GPIO34 and GPIO35 are input-only and do not support internal pull-ups.
+// GPIO32 and GPIO33 support INPUT_PULLUP and keep the active-LOW sensor logic.
+const uint8_t PIN_S1     = 32;
+const uint8_t PIN_S2     = 33;
 const uint8_t PIN_BUZZER = 25;
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
@@ -103,8 +105,8 @@ QueueHandle_t networkQueue;
 void setup() {
   Serial.begin(115200);
 
-  pinMode(PIN_S1, INPUT);
-  pinMode(PIN_S2, INPUT);
+  pinMode(PIN_S1, INPUT_PULLUP);
+  pinMode(PIN_S2, INPUT_PULLUP);
   pinMode(PIN_BUZZER, OUTPUT);
   digitalWrite(PIN_BUZZER, LOW);
 
